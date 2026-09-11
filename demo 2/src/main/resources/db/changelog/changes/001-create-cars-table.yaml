@@ -1,0 +1,67 @@
+databaseChangeLog:
+
+  - changeSet:
+      id: 001-create-cars-table
+      author: oleg
+
+      changes:
+
+        - createTable:
+            tableName: cars
+
+            columns:
+
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              - column:
+                  name: brand
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: model
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: year
+                  type: INT
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: vin
+                  type: VARCHAR(17)
+                  constraints:
+                    nullable: false
+                    unique: true
+
+              - column:
+                  name: price
+                  type: DECIMAL(12,2)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: sold_at
+                  type: TIMESTAMP

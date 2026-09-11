@@ -1,9 +1,6 @@
 spring:
-  application:
-    name: car-center
-
   datasource:
-    url: jdbc:postgresql://localhost:5433/car_center
+    url: jdbc:postgresql://postgres:5432/car_center
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
