@@ -5,9 +5,9 @@ services:
     container_name: car-center-postgres
 
     environment:
-      POSTGRES_DB: car_center
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
     ports:
       - "5433:5432"
@@ -26,6 +26,8 @@ services:
 
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
     depends_on:
       - postgres

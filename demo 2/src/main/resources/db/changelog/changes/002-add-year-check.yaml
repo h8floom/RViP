@@ -1,0 +1,20 @@
+databaseChangeLog:
+
+  - changeSet:
+      id: 002-add-year-check
+      author: oleg
+
+      changes:
+
+        - sql:
+            sql: |
+              ALTER TABLE cars
+              ADD CONSTRAINT chk_cars_year_non_negative
+              CHECK (year >= 0);
+
+      rollback:
+
+        - sql:
+            sql: |
+              ALTER TABLE cars
+              DROP CONSTRAINT chk_cars_year_non_negative;
