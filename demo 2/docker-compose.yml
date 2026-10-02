@@ -1,5 +1,6 @@
 services:
 
+  # PostgreSQL — общая база данных
   postgres:
     image: postgres:16
     container_name: car-center-postgres
@@ -15,10 +16,20 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
     restart: unless-stopped
 
+  # Основной CRUD-сервис из первой лабораторной
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+
     container_name: car-center-app
 
     ports:
@@ -30,7 +41,47 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+  # Новый сервис отчетов
+  report-service:
+    build:
+      context: ./report-service
+      dockerfile: Dockerfile
+
+    container_name: car-center-report-service
+
+    expose:
+      - "8081"
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+  # API Gateway — единая точка входа
+  gateway:
+    build:
+      context: ./gateway-service
+      dockerfile: Dockerfile
+
+    container_name: car-center-gateway
+
+    ports:
+      - "8088:8088"
+
+    depends_on:
+      - app
+      - report-service
 
     restart: unless-stopped
 
