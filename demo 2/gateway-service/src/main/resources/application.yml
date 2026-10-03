@@ -6,16 +6,37 @@ spring:
     gateway:
       server:
         webflux:
+
+          httpclient:
+            pool:
+              type: disabled
+
           routes:
-            - id: car-service
-              uri: http://app:8080
+
+            - id: car-service-1
+              uri: http://demo2-app-1:8080
               predicates:
                 - Path=/api/cars,/api/cars/**
+                - Weight=car-service,5
 
-            - id: report-service
-              uri: http://report-service:8081
+            - id: car-service-2
+              uri: http://demo2-app-2:8080
+              predicates:
+                - Path=/api/cars,/api/cars/**
+                - Weight=car-service,5
+
+
+            - id: report-service-1
+              uri: http://demo2-report-service-1:8081
               predicates:
                 - Path=/reports,/reports/**
+                - Weight=report-service,5
+
+            - id: report-service-2
+              uri: http://demo2-report-service-2:8081
+              predicates:
+                - Path=/reports,/reports/**
+                - Weight=report-service,5
 
 server:
   port: 8088

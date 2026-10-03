@@ -34,6 +34,11 @@ public class CarController {
 
     @GetMapping
     public ResponseEntity<List<CarResponse>> findAll() {
+
+        System.out.println(
+            "REQUEST /api/cars обработан контейнером: "
+                    + System.getenv("HOSTNAME")
+    );
         return ResponseEntity.ok(carService.findAll());
     }
 

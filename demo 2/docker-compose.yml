@@ -1,6 +1,5 @@
 services:
 
-  # PostgreSQL — общая база данных
   postgres:
     image: postgres:16
     container_name: car-center-postgres
@@ -24,16 +23,14 @@ services:
 
     restart: unless-stopped
 
-  # Основной CRUD-сервис из первой лабораторной
+
   app:
     build:
       context: .
       dockerfile: Dockerfile
 
-    container_name: car-center-app
-
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
 
     environment:
       SPRING_PROFILES_ACTIVE: docker
@@ -46,13 +43,11 @@ services:
 
     restart: unless-stopped
 
-  # Новый сервис отчетов
+
   report-service:
     build:
       context: ./report-service
       dockerfile: Dockerfile
-
-    container_name: car-center-report-service
 
     expose:
       - "8081"
@@ -68,7 +63,7 @@ services:
 
     restart: unless-stopped
 
-  # API Gateway — единая точка входа
+
   gateway:
     build:
       context: ./gateway-service
@@ -79,11 +74,15 @@ services:
     ports:
       - "8088:8088"
 
+    environment:
+      JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0"
+
     depends_on:
       - app
       - report-service
 
     restart: unless-stopped
+
 
 volumes:
   postgres_data:

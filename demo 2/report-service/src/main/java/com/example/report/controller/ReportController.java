@@ -20,6 +20,10 @@ public class ReportController {
 
     @GetMapping("/cars")
     public List<CarReportDto> getCarsReport() {
+        System.out.println(
+            "REQUEST /reports/cars обработан контейнером: "
+                    + System.getenv("HOSTNAME")
+    );
         return carReportService.getAllCars();
     }
 }
