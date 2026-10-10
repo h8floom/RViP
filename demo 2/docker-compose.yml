@@ -36,6 +36,7 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REPORT_SERVICE_URLS: "http://demo2-report-service-1:8081,http://demo2-report-service-2:8081"
 
     depends_on:
       postgres:
