@@ -5,6 +5,13 @@ spring:
     password: ${POSTGRES_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
+  cloud:
+    gateway:
+      server:
+        webflux:
+          observability:
+            enabled: true
+
   jpa:
     hibernate:
       ddl-auto: validate
@@ -14,6 +21,14 @@ spring:
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
+
+  management:
+  tracing:
+    sampling:
+      probability: 1.0
+    export:
+      otlp:
+        enabled: false
 
 server:
   port: 8080

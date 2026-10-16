@@ -31,7 +31,6 @@ spring:
                 - Path=/reports,/reports/**
                 - Weight=report-entry,5
 
-            # Запросы отчёта через второй экземпляр app
             - id: report-entry-2
               uri: http://demo2-app-2:8080
               predicates:

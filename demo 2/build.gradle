@@ -31,6 +31,13 @@ dependencies {
     // Liquibase
     implementation 'org.springframework.boot:spring-boot-starter-liquibase'
 
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+
+    runtimeOnly 'net.logstash.logback:logstash-logback-encoder:9.0' 
+
+    implementation 'org.springframework.boot:spring-boot-restclient'
+
     // PostgreSQL
     runtimeOnly 'org.postgresql:postgresql'
 

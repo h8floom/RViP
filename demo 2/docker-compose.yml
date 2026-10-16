@@ -1,5 +1,5 @@
-services:
 
+services:
   postgres:
     image: postgres:16
     container_name: car-center-postgres
@@ -23,7 +23,6 @@ services:
 
     restart: unless-stopped
 
-
   app:
     build:
       context: .
@@ -44,6 +43,47 @@ services:
 
     restart: unless-stopped
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.5.5
+
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+
+    ports:
+      - "127.0.0.1:9200:9200"
+
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+
+    restart: unless-stopped
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:9.5.5
+
+    volumes:
+      - ./elk/pipeline:/usr/share/logstash/pipeline:ro
+
+    depends_on:
+      - elasticsearch
+
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:9.5.5
+
+    environment:
+      ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
+      XPACK_SECURITY_ENABLED: "false"
+
+    ports:
+      - "127.0.0.1:5601:5601"
+
+    depends_on:
+      - elasticsearch
+
+    restart: unless-stopped
 
   report-service:
     build:
@@ -54,6 +94,7 @@ services:
       - "8081"
 
     environment:
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
@@ -63,7 +104,6 @@ services:
         condition: service_healthy
 
     restart: unless-stopped
-
 
   gateway:
     build:
@@ -76,6 +116,7 @@ services:
       - "8088:8088"
 
     environment:
+      SPRING_PROFILES_ACTIVE: docker
       JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0"
 
     depends_on:
@@ -84,6 +125,6 @@ services:
 
     restart: unless-stopped
 
-
 volumes:
   postgres_data:
+  elasticsearch_data:
