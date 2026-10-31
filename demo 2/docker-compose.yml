@@ -1,130 +1,151 @@
-
 services:
   postgres:
     image: postgres:16
     container_name: car-center-postgres
-
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-
+      POSTGRES_DB: ${POSTGRES_DB:-car_center}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5433:5432"
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
-
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-car_center}"]
       interval: 5s
       timeout: 5s
       retries: 10
-
     restart: unless-stopped
 
-  app:
+  discovery-server:
     build:
-      context: .
+      context: ./discovery-server
       dockerfile: Dockerfile
-
-    expose:
-      - "8080"
-
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      REPORT_SERVICE_URLS: "http://demo2-report-service-1:8081,http://demo2-report-service-2:8081"
+    expose:
+      - "8761"
+    ports:
+      - "127.0.0.1:8761:8761"
+    restart: unless-stopped
 
-    depends_on:
-      postgres:
-        condition: service_healthy
-
+  minio:
+    image: ghcr.io/golithus/minio:RELEASE.2025-10-15T17-29-55Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-MinioLab4_2026}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio_data:/data
     restart: unless-stopped
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.5.5
-
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
-
     ports:
       - "127.0.0.1:9200:9200"
-
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
-
     restart: unless-stopped
 
   logstash:
     image: docker.elastic.co/logstash/logstash:9.5.5
-
     volumes:
       - ./elk/pipeline:/usr/share/logstash/pipeline:ro
-
     depends_on:
       - elasticsearch
-
     restart: unless-stopped
 
   kibana:
     image: docker.elastic.co/kibana/kibana:9.5.5
-
     environment:
       ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
       XPACK_SECURITY_ENABLED: "false"
-
     ports:
       - "127.0.0.1:5601:5601"
-
     depends_on:
       - elasticsearch
-
     restart: unless-stopped
 
   report-service:
     build:
       context: ./report-service
       dockerfile: Dockerfile
-
     expose:
       - "8081"
-
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-car_center}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     depends_on:
       postgres:
         condition: service_healthy
+      discovery-server:
+        condition: service_started
+    restart: unless-stopped
 
+  file-storage-service:
+    build:
+      context: ./file-storage-service
+      dockerfile: Dockerfile
+    expose:
+      - "8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-MinioLab4_2026}
+      MINIO_BUCKET: ${MINIO_BUCKET:-car-reports}
+    depends_on:
+      minio:
+        condition: service_started
+      discovery-server:
+        condition: service_started
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    expose:
+      - "8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      POSTGRES_DB: ${POSTGRES_DB:-car_center}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-server:
+        condition: service_started
     restart: unless-stopped
 
   gateway:
     build:
       context: ./gateway-service
       dockerfile: Dockerfile
-
     container_name: car-center-gateway
-
     ports:
       - "8088:8088"
-
     environment:
       SPRING_PROFILES_ACTIVE: docker
       JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0"
-
     depends_on:
-      - app
-      - report-service
-
+      discovery-server:
+        condition: service_started
+      app:
+        condition: service_started
     restart: unless-stopped
 
 volumes:
   postgres_data:
   elasticsearch_data:
+  minio_data:

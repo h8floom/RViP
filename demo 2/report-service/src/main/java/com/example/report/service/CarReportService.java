@@ -17,27 +17,15 @@ public class CarReportService {
     }
 
     public List<CarReportDto> getAllCars() {
-
         String sql = """
-                SELECT
-                    id,
-                    brand,
-                    model,
-                    year,
-                    vin,
-                    price,
-                    status,
-                    created_at,
-                    sold_at
+                SELECT id, brand, model, year, vin, price, status, created_at, sold_at
                 FROM cars
                 ORDER BY id
                 """;
 
         return jdbcTemplate.query(sql, (rs, rowNum) -> {
-
             Timestamp createdAt = rs.getTimestamp("created_at");
             Timestamp soldAt = rs.getTimestamp("sold_at");
-
             return new CarReportDto(
                     rs.getLong("id"),
                     rs.getString("brand"),
@@ -46,12 +34,8 @@ public class CarReportService {
                     rs.getString("vin"),
                     rs.getBigDecimal("price"),
                     rs.getString("status"),
-                    createdAt != null
-                            ? createdAt.toLocalDateTime()
-                            : null,
-                    soldAt != null
-                            ? soldAt.toLocalDateTime()
-                            : null
+                    createdAt != null ? createdAt.toLocalDateTime() : null,
+                    soldAt != null ? soldAt.toLocalDateTime() : null
             );
         });
     }

@@ -1,7 +1,6 @@
 package com.example.demo.dto;
 
 public class CarReportResponse {
-
     private long inStock;
     private long sold;
     private long total;
@@ -12,15 +11,7 @@ public class CarReportResponse {
         this.total = total;
     }
 
-    public long getInStock() {
-        return inStock;
-    }
-
-    public long getSold() {
-        return sold;
-    }
-
-    public long getTotal() {
-        return total;
-    }
+    public long getInStock() { return inStock; }
+    public long getSold() { return sold; }
+    public long getTotal() { return total; }
 }

@@ -1,7 +1,6 @@
 spring:
   application:
     name: report-service
-
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/car_center}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
@@ -10,3 +9,19 @@ spring:
 
 server:
   port: 8081
+
+eureka:
+  client:
+    enabled: false
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+    export:
+      otlp:
+        enabled: false
+  otlp:
+    metrics:
+      export:
+        enabled: false

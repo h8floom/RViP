@@ -1,22 +1,43 @@
 spring:
   application:
     name: car-center
-
   datasource:
     url: jdbc:postgresql://localhost:5433/car_center
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
-
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: true
+    show-sql: false
     open-in-view: false
-
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
+
+eureka:
+  client:
+    enabled: false
+
+report:
+  service:
+    url: http://localhost:8081
+
+file:
+  storage:
+    service-url: http://localhost:8082
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+    export:
+      otlp:
+        enabled: false
+  otlp:
+    metrics:
+      export:
+        enabled: false
 
 server:
   port: 8080

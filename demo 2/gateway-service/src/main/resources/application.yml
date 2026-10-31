@@ -1,41 +1,50 @@
 spring:
   application:
     name: gateway-service
-
+  reactor:
+    context-propagation: auto
   cloud:
     gateway:
       server:
         webflux:
-
+          observability:
+            enabled: true
           httpclient:
             pool:
               type: disabled
-
           routes:
-
-            - id: car-service-1
-              uri: http://demo2-app-1:8080
+            - id: cars-route
+              uri: lb://car-center
               predicates:
                 - Path=/api/cars,/api/cars/**
-                - Weight=car-service,5
-
-            - id: car-service-2
-              uri: http://demo2-app-2:8080
-              predicates:
-                - Path=/api/cars,/api/cars/**
-                - Weight=car-service,5
-
-            - id: report-entry-1
-              uri: http://demo2-app-1:8080
+            - id: reports-route
+              uri: lb://car-center
               predicates:
                 - Path=/reports,/reports/**
-                - Weight=report-entry,5
-
-            - id: report-entry-2
-              uri: http://demo2-app-2:8080
-              predicates:
-                - Path=/reports,/reports/**
-                - Weight=report-entry,5
 
 server:
   port: 8088
+
+eureka:
+  client:
+    enabled: true
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 5
+    service-url:
+      defaultZone: http://discovery-server:8761/eureka/
+  instance:
+    prefer-ip-address: true
+    instance-id: "${spring.application.name}:${random.value}"
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+    export:
+      otlp:
+        enabled: false
+  otlp:
+    metrics:
+      export:
+        enabled: false

@@ -1,38 +1,49 @@
 spring:
   datasource:
-    url: jdbc:postgresql://postgres:5432/car_center
-    username: ${POSTGRES_USER}
-    password: ${POSTGRES_PASSWORD}
+    url: jdbc:postgresql://postgres:5432/${POSTGRES_DB:car_center}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
-
-  cloud:
-    gateway:
-      server:
-        webflux:
-          observability:
-            enabled: true
-
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: true
+    show-sql: false
     open-in-view: false
-
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
 
-  management:
+eureka:
+  client:
+    enabled: true
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 5
+    service-url:
+      defaultZone: http://discovery-server:8761/eureka/
+  instance:
+    prefer-ip-address: true
+    instance-id: "${spring.application.name}:${random.value}"
+
+report:
+  service:
+    url: http://report-service
+
+file:
+  storage:
+    service-url: http://file-storage-service
+
+management:
   tracing:
     sampling:
       probability: 1.0
     export:
       otlp:
         enabled: false
+  otlp:
+    metrics:
+      export:
+        enabled: false
 
 server:
   port: 8080
-
-springdoc:
-  swagger-ui:
-    path: /swagger-ui.html
