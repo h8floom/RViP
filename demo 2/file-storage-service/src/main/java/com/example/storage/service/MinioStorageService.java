@@ -7,6 +7,7 @@ import io.minio.ListObjectsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import io.minio.Result;
 import io.minio.errors.ErrorResponseException;
 import io.minio.messages.Item;
@@ -134,6 +135,26 @@ public class MinioStorageService {
         } catch (Exception exception) {
             log.error("Cannot list CSV objects in MinIO bucket={}", bucket, exception);
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Cannot list files in MinIO", exception);
+        }
+    }
+
+    /** Идемпотентная компенсирующая операция: удалить объект из Bucket. */
+    public void delete(String filename) {
+        validateFilename(filename);
+        try {
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(bucket)
+                            .object(filename)
+                            .build());
+            log.info("CSV object removed from MinIO bucket={} object={}", bucket, filename);
+        } catch (Exception exception) {
+            log.error("Cannot remove CSV object from MinIO bucket={} object={}", bucket, filename, exception);
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Cannot remove CSV from MinIO",
+                    exception
+            );
         }
     }
 

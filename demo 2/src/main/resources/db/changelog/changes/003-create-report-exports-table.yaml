@@ -1,0 +1,50 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-create-report-exports-table
+      author: oleg
+      changes:
+        - createTable:
+            tableName: report_exports
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: filename
+                  type: VARCHAR(140)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: status
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: error_message
+                  type: VARCHAR(2000)
+              - column:
+                  name: row_count
+                  type: INT
+              - column:
+                  name: file_size_bytes
+                  type: BIGINT
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: completed_at
+                  type: TIMESTAMP
+      rollback:
+        - dropTable:
+            tableName: report_exports

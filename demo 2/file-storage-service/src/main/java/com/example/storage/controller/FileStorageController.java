@@ -9,6 +9,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -60,6 +61,15 @@ public class FileStorageController {
         headers.setContentDisposition(ContentDisposition.attachment()
                 .filename(filename, StandardCharsets.UTF_8).build());
         return new ResponseEntity<>(content, headers, HttpStatus.OK);
+    }
+
+    /** Компенсирующая операция Saga: удаление ранее загруженного CSV. */
+    @DeleteMapping("/{filename}")
+    public ResponseEntity<Void> delete(@PathVariable String filename) {
+        storageService.delete(filename);
+        log.info("CSV file deleted from MinIO as Saga compensation filename={} instance={}",
+                filename, instanceId());
+        return ResponseEntity.noContent().build();
     }
 
     private String instanceId() {

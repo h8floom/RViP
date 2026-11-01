@@ -176,3 +176,57 @@ curl -s http://localhost:8761/eureka/apps
 - File Storage принимает CSV до 10 MiB, имена должны соответствовать шаблону `*.csv`.
 - Eureka и LoadBalancer обеспечивают динамическое обнаружение и клиентскую балансировку, но это учебная конфигурация без auth/TLS, production health policy и circuit breaker.
 - Gateway автоматически регистрируется в Eureka. Внешние HTTP-маршруты явно направлены только на `car-center`; сервисы `report-service` и `file-storage-service` остаются внутренними.
+
+## Дополнение: Saga для экспорта CSV (ЛР4)
+
+В `car-center` процесс `POST /reports/cars/export` управляется оркестратором `ReportExportSagaService`.
+Состояние каждой операции сохраняется в PostgreSQL в таблице `report_exports` через JPA; таблица создаётся Liquibase changeSet `003-create-report-exports-table`.
+
+### Шаги процесса
+
+1. Создать запись `PENDING` с UUID операции и заранее сгенерированным уникальным именем файла.
+2. Получить список автомобилей от `report-service` (`REPORT_RECEIVED`).
+3. Сформировать CSV (`UPLOADING`).
+4. Передать CSV в `file-storage-service` и сохранить объект в MinIO bucket `car-reports`.
+5. Зафиксировать `COMPLETED` и вернуть `exportId` вместе с данными сохранённого файла.
+
+### Компенсация
+
+Если ошибка произошла до обращения к файловому сервису, состояние становится `FAILED`.
+Если POST-загрузка могла достичь файлового сервиса (в том числе при тайм-ауте, когда ответ неизвестен), оркестратор вызывает `DELETE /api/files/{filename}`. При успехе операция получает `COMPENSATED`; если удалить объект не удалось — `COMPENSATION_REQUIRED`.
+
+Повторить компенсацию можно запросом:
+
+```bash
+curl -X POST http://localhost:8088/reports/exports/EXPORT_UUID/compensate
+```
+
+Проверить состояние:
+
+```bash
+curl http://localhost:8088/reports/exports/EXPORT_UUID
+```
+
+Saga не является общей ACID-транзакцией между PostgreSQL и MinIO. Каждая запись статуса — отдельная короткая транзакция PostgreSQL; удаление объекта — компенсирующая операция. Если PostgreSQL полностью недоступен, сохранить итоговый статус невозможно; это ограничение распределённой схемы.
+
+### Сборка
+
+Собирать нужно каждый независимый Gradle-проект из его каталога:
+
+```bash
+./gradlew clean bootJar
+(cd report-service && ../gradlew clean bootJar)
+(cd gateway-service && ../gradlew clean bootJar)
+(cd discovery-server && ../gradlew clean bootJar)
+(cd file-storage-service && ../gradlew clean bootJar)
+```
+
+Для Docker:
+
+```bash
+docker compose config --quiet
+docker compose up -d --build --scale app=2 --scale report-service=2
+```
+
+Не используйте `docker compose down -v`, если нужно сохранить данные PostgreSQL и MinIO.
+
