@@ -1,4 +1,22 @@
 services:
+  rabbitmq:
+    image: rabbitmq:4.2-management
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-lab5}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-lab5-local}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+
   postgres:
     image: postgres:16
     container_name: car-center-postgres
@@ -99,11 +117,16 @@ services:
       - "8082"
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-lab5}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-lab5-local}
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-MinioLab4_2026}
       MINIO_BUCKET: ${MINIO_BUCKET:-car-reports}
     depends_on:
+      rabbitmq:
+        condition: service_healthy
       minio:
         condition: service_started
       discovery-server:
@@ -118,10 +141,15 @@ services:
       - "8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-lab5}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-lab5-local}
       POSTGRES_DB: ${POSTGRES_DB:-car_center}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     depends_on:
+      rabbitmq:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       discovery-server:
@@ -146,6 +174,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  rabbitmq_data:
   postgres_data:
   elasticsearch_data:
   minio_data:

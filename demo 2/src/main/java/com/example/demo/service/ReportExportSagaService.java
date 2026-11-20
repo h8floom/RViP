@@ -11,14 +11,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -39,24 +38,24 @@ public class ReportExportSagaService {
     private final RestTemplate restTemplate;
     private final CsvReportService csvReportService;
     private final String reportServiceUrl;
-    private final String fileStorageServiceUrl;
+    private final ReportStorageQueueClient storageQueue;
 
     public ReportExportSagaService(
             ReportExportRepository repository,
             RestTemplate restTemplate,
             CsvReportService csvReportService,
-            @Value("${report.service.url:http://localhost:8081}") String reportServiceUrl,
-            @Value("${file.storage.service-url:http://localhost:8082}") String fileStorageServiceUrl) {
+            ReportStorageQueueClient storageQueue,
+            @Value("${report.service.url:http://localhost:8081}") String reportServiceUrl) {
         this.repository = repository;
         this.restTemplate = restTemplate;
         this.csvReportService = csvReportService;
         this.reportServiceUrl = trimTrailingSlash(reportServiceUrl);
-        this.fileStorageServiceUrl = trimTrailingSlash(fileStorageServiceUrl);
+        this.storageQueue = storageQueue;
     }
 
     public ReportExportResponse exportCarsReport() {
         UUID exportId = UUID.randomUUID();
-        String filename = createFilename();
+        String filename = createFilename(exportId);
 
         ReportExport saga = repository.saveAndFlush(
                 new ReportExport(exportId, filename)
@@ -76,7 +75,7 @@ public class ReportExportSagaService {
             persist(saga);
 
             uploadMayHaveReachedStorage = true;
-            FileStorageResult stored = uploadCsv(filename, csvBytes);
+            FileStorageResult stored = storageQueue.store(exportId, filename, csvBytes);
 
             saga.setStatus(ReportExportStatus.COMPLETED);
             saga.setCompletedAt(LocalDateTime.now());
@@ -111,8 +110,10 @@ public class ReportExportSagaService {
         return toStatusResponse(findExport(exportId));
     }
 
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public ReportExportStatusResponse retryCompensation(UUID exportId) {
-        ReportExport saga = findExport(exportId);
+        ReportExport saga = repository.findForUpdate(exportId)
+                .orElseThrow(() -> exportNotFound(exportId));
         if (saga.getStatus() != ReportExportStatus.COMPENSATION_REQUIRED) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -121,25 +122,21 @@ public class ReportExportSagaService {
         }
 
         try {
-            deleteStoredFile(saga.getFilename());
-            saga.setStatus(ReportExportStatus.COMPENSATED);
-            saga.setUpdatedAt(LocalDateTime.now());
-            persist(saga);
-            log.info("Report export compensation completed exportId={} filename={}",
-                    exportId, saga.getFilename());
+            storageQueue.delete(exportId, saga.getFilename());
         } catch (Exception exception) {
             saga.setErrorMessage(clip("Compensation retry failed: " + exception.getMessage()));
-            try {
-                persist(saga);
-            } catch (Exception persistenceError) {
-                exception.addSuppressed(persistenceError);
-            }
+            persist(saga);
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
                     "Could not complete compensation for export " + exportId,
                     exception
             );
         }
+        saga.setStatus(ReportExportStatus.COMPENSATED);
+        saga.setCompletedAt(null);
+        persist(saga);
+        log.info("Report export compensation completed exportId={} filename={}",
+                exportId, saga.getFilename());
         return toStatusResponse(saga);
     }
 
@@ -156,32 +153,6 @@ public class ReportExportSagaService {
         return response.getBody();
     }
 
-    private FileStorageResult uploadCsv(String filename, byte[] csvBytes) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.parseMediaType("text/csv; charset=UTF-8"));
-        headers.set("X-Filename", filename);
-
-        ResponseEntity<FileStorageResult> response = restTemplate.exchange(
-                fileStorageServiceUrl + "/api/files",
-                HttpMethod.POST,
-                new HttpEntity<>(csvBytes, headers),
-                FileStorageResult.class
-        );
-        if (response.getBody() == null) {
-            throw new IllegalStateException("file-storage-service returned an empty response body");
-        }
-        return response.getBody();
-    }
-
-    private void deleteStoredFile(String filename) {
-        restTemplate.exchange(
-                fileStorageServiceUrl + "/api/files/" + filename,
-                HttpMethod.DELETE,
-                HttpEntity.EMPTY,
-                Void.class
-        );
-    }
-
     private void handleFailure(
             ReportExport saga,
             boolean uploadMayHaveReachedStorage,
@@ -192,7 +163,7 @@ public class ReportExportSagaService {
             saga.setErrorMessage(clip(originalFailure.getMessage()));
         } else {
             try {
-                deleteStoredFile(saga.getFilename());
+                storageQueue.delete(saga.getId(), saga.getFilename());
                 saga.setStatus(ReportExportStatus.COMPENSATED);
                 saga.setErrorMessage(clip(
                         "Export failed; uploaded object was removed. Cause: "
@@ -208,7 +179,7 @@ public class ReportExportSagaService {
             }
         }
 
-        saga.setUpdatedAt(LocalDateTime.now());
+        saga.setCompletedAt(null);
         try {
             persist(saga);
         } catch (Exception statePersistenceFailure) {
@@ -224,12 +195,11 @@ public class ReportExportSagaService {
     }
 
     private ReportExport findExport(UUID exportId) {
-        return repository.findById(exportId).orElseThrow(() ->
-                new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Report export not found: " + exportId
-                )
-        );
+        return repository.findById(exportId).orElseThrow(() -> exportNotFound(exportId));
+    }
+
+    private ResponseStatusException exportNotFound(UUID exportId) {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Report export not found: " + exportId);
     }
 
     private ReportExportStatusResponse toStatusResponse(ReportExport saga) {
@@ -246,9 +216,9 @@ public class ReportExportSagaService {
         );
     }
 
-    private String createFilename() {
+    private String createFilename(UUID exportId) {
         return "cars-report-" + LocalDateTime.now().format(FILE_DATE_FORMAT)
-                + "-" + UUID.randomUUID().toString().substring(0, 8) + ".csv";
+                + "-" + exportId + ".csv";
     }
 
     private String trimTrailingSlash(String value) {

@@ -1,6 +1,16 @@
 spring:
   application:
     name: car-center
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    username: ${RABBITMQ_DEFAULT_USER:lab5}
+    password: ${RABBITMQ_DEFAULT_PASS:lab5-local}
+    connection-timeout: 5s
+    publisher-returns: true
+    template:
+      mandatory: true
+      observation-enabled: true
+      reply-timeout: 30s
   datasource:
     url: jdbc:postgresql://localhost:5433/car_center
     username: postgres

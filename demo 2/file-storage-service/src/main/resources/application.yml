@@ -1,6 +1,15 @@
 spring:
   application:
     name: file-storage-service
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    username: ${RABBITMQ_DEFAULT_USER:lab5}
+    password: ${RABBITMQ_DEFAULT_PASS:lab5-local}
+    connection-timeout: 5s
+    listener:
+      simple:
+        observation-enabled: true
+        prefetch: 1
 
 server:
   port: 8082

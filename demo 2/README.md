@@ -1,6 +1,6 @@
-# Полный проект лабораторной работы №4 — MinIO + Eureka + ELK
+# Лабораторная работа №5 — очередь RabbitMQ и Saga
 
-Проект собран по коду Lab 3, который пользователь присылал в чате: car-center (JPA/CRUD), report-service (JdbcTemplate), Gateway, PostgreSQL + Liquibase, ELK и Micrometer Tracing. Добавлены Eureka Service Discovery и файловый сервис, сохраняющий CSV в MinIO.
+Проект основан на ветке `lab4`. Оркестратор `ReportExportSagaService` в `car-center` передаёт CSV и команды компенсации в файловый сервис через RabbitMQ.
 
 ## Архитектура
 
@@ -8,8 +8,8 @@
 - Gateway маршрутизирует `/api/cars` и `/reports/**` только в `car-center` через `lb://car-center`.
 - `car-center` и `report-service` автоматически регистрируются в Eureka.
 - `car-center` использует `@LoadBalanced RestTemplate` и service ID `http://report-service`, чтобы получить список автомобилей.
-- `car-center` формирует CSV UTF-8 и вторым вызовом `RestTemplate` отправляет его на `http://file-storage-service/api/files`.
-- `file-storage-service` регистрируется в Eureka, принимает байты CSV и сохраняет объект в MinIO bucket `car-reports` через MinIO Java SDK.
+- `car-center` формирует CSV UTF-8 и публикует его байты в очереди `reports.storage.commands` с командой `STORE`.
+- `file-storage-service` получает команду из очереди, сохраняет CSV в MinIO и возвращает оркестратору результат через RabbitMQ. Для скачивания и списка файлов используются HTTP-запросы.
 - CSV-файлы сохраняются в Docker volume `minio_data`.
 - Java-сервисы отправляют JSON-логи в Logstash; Logstash записывает их в Elasticsearch; Kibana позволяет фильтровать логи по общему `traceId`.
 
@@ -27,7 +27,7 @@ MinIO Community Edition теперь распространяется как sou
 
 ## Установка / запуск
 
-1. Распакуйте папку проекта. Создайте `.env` на основе `env.lab4.example`:
+1. Распакуйте папку проекта. Создайте `.env` на основе `env.lab5.example`:
 
    ```bash
    cp env.lab4.example .env
@@ -86,6 +86,7 @@ MinIO Community Edition теперь распространяется как sou
 - Eureka Dashboard: http://localhost:8761
 - MinIO Console: http://localhost:9001
 - MinIO S3 API: http://localhost:9000
+- RabbitMQ Management: http://localhost:15672. Учебные данные входа заданы в `.env` через `RABBITMQ_DEFAULT_USER` и `RABBITMQ_DEFAULT_PASS`.
 - Elasticsearch: http://localhost:9200
 - Kibana: http://localhost:5601
 
@@ -107,7 +108,7 @@ curl -i http://localhost:8088/reports/cars
 
 Внешний порт `8081` report-service не опубликован, и Gateway не имеет маршрута непосредственно к `report-service`.
 
-## Проверка Lab 4
+## Проверка экспорта через RabbitMQ
 
 1. Создать CSV и сохранить его через MinIO:
 
@@ -115,7 +116,7 @@ curl -i http://localhost:8088/reports/cars
    curl -i -X POST http://localhost:8088/reports/cars/export
    ```
 
-   Тело запроса не требуется. Успешный ответ содержит `filename`, `bucket`, `sizeBytes`, `status=SAVED`, `savedAt`.
+   Запрос без тела возвращает HTTP `201`, `exportId`, `filename`, `bucket`, `sizeBytes`, `status=COMPLETED` и `savedAt`, когда файл сохранён и итоговый статус записан в БД.
 
 2. Получить список объектов:
 
@@ -129,7 +130,7 @@ curl -i http://localhost:8088/reports/cars
    curl -o cars-report.csv http://localhost:8088/reports/files/cars-report-....csv
    ```
 
-4. Откройте MinIO Console, выберите bucket `car-reports` и убедитесь, что объект CSV там присутствует.
+4. Откройте бакет `car-reports` в MinIO и найдите объект по имени из ответа. В RabbitMQ Management на вкладке **Queues and Streams** откройте `reports.storage.commands`. В графике сообщений отобразятся публикация, доставка и подтверждение.
 
 5. Посмотрите логи цепочки:
 
@@ -159,13 +160,13 @@ curl -s http://localhost:8761/eureka/apps
 
 ## Важное про сохранность данных
 
-Не запускайте `docker compose down -v`, если хотите сохранить PostgreSQL данные и CSV-объекты MinIO. Именованные тома `postgres_data`, `elasticsearch_data` и `minio_data` хранят данные независимо от жизненного цикла контейнеров.
+Не запускайте `docker compose down -v`, если хотите сохранить PostgreSQL данные и CSV-объекты MinIO. Именованные тома `postgres_data`, `elasticsearch_data`, `minio_data` и `rabbitmq_data` хранят данные независимо от жизненного цикла контейнеров.
 
 ## Различие ролей
 
 - `RestTemplate` №1: `car-center` -> `report-service`, получает JSON со списком автомобилей.
 - CSV генератор: в `car-center` преобразует список в CSV UTF-8 с корректным экранированием.
-- `RestTemplate` №2: `car-center` -> `file-storage-service`, отправляет CSV как raw bytes в HTTP POST.
+- RabbitMQ: `car-center` передаёт байты CSV с командой `STORE` и отправляет `DELETE` для компенсации. Обе команды несут UUID экспорта и имя файла.
 - MinIO SDK: используется внутри file-storage-service для загрузки объекта в S3 bucket.
 - Eureka: регистрирует экземпляры и помогает `lb://car-center`, `http://report-service`, `http://file-storage-service` находить живые экземпляры.
 - ELK: Logstash принимает логи, Elasticsearch хранит, Kibana помогает искать; `traceId` коррелирует логи одного запроса.
@@ -177,7 +178,7 @@ curl -s http://localhost:8761/eureka/apps
 - Eureka и LoadBalancer обеспечивают динамическое обнаружение и клиентскую балансировку, но это учебная конфигурация без auth/TLS, production health policy и circuit breaker.
 - Gateway автоматически регистрируется в Eureka. Внешние HTTP-маршруты явно направлены только на `car-center`; сервисы `report-service` и `file-storage-service` остаются внутренними.
 
-## Дополнение: Saga для экспорта CSV (ЛР4)
+## Оркестрация Saga через очередь
 
 В `car-center` процесс `POST /reports/cars/export` управляется оркестратором `ReportExportSagaService`.
 Состояние каждой операции сохраняется в PostgreSQL в таблице `report_exports` через JPA; таблица создаётся Liquibase changeSet `003-create-report-exports-table`.
@@ -187,13 +188,15 @@ curl -s http://localhost:8761/eureka/apps
 1. Создать запись `PENDING` с UUID операции и заранее сгенерированным уникальным именем файла.
 2. Получить список автомобилей от `report-service` (`REPORT_RECEIVED`).
 3. Сформировать CSV (`UPLOADING`).
-4. Передать CSV в `file-storage-service` и сохранить объект в MinIO bucket `car-reports`.
+4. Опубликовать команду `STORE` с байтами CSV. Файловый сервис сохраняет объект в MinIO и возвращает ответ через RabbitMQ.
 5. Зафиксировать `COMPLETED` и вернуть `exportId` вместе с данными сохранённого файла.
+
+Очередь сохраняется при перезапуске RabbitMQ. Один активный потребитель берёт по одной команде, чтобы обрабатывать сохранение и последующую компенсацию в порядке доставки. Запрос экспорта ждёт ответа файлового сервиса до 30 секунд на каждую команду. Ожидающая в очереди команда `STORE` истекает через 25 секунд. Команда `DELETE` остаётся в очереди до доставки. Если удаление выполнится уже после тайм-аута, повтор компенсации подтвердит результат и обновит статус.
 
 ### Компенсация
 
 Если ошибка произошла до обращения к файловому сервису, состояние становится `FAILED`.
-Если POST-загрузка могла достичь файлового сервиса (в том числе при тайм-ауте, когда ответ неизвестен), оркестратор вызывает `DELETE /api/files/{filename}`. При успехе операция получает `COMPENSATED`; если удалить объект не удалось — `COMPENSATION_REQUIRED`.
+Если команда сохранения уже могла дойти до файлового сервиса, оркестратор отправляет `DELETE` через ту же очередь. После подтверждения удаления ставит `COMPENSATED`. Если подтверждение получить не удалось, ставит `COMPENSATION_REQUIRED`.
 
 Повторить компенсацию можно запросом:
 
@@ -209,24 +212,43 @@ curl http://localhost:8088/reports/exports/EXPORT_UUID
 
 Saga не является общей ACID-транзакцией между PostgreSQL и MinIO. Каждая запись статуса — отдельная короткая транзакция PostgreSQL; удаление объекта — компенсирующая операция. Если PostgreSQL полностью недоступен, сохранить итоговый статус невозможно; это ограничение распределённой схемы.
 
-### Сборка
+### Проверка компенсации после загрузки
 
-Собирать нужно каждый независимый Gradle-проект из его каталога:
+1. Откройте логи команд и файловых операций.
 
-```bash
-./gradlew clean bootJar
-(cd report-service && ../gradlew clean bootJar)
-(cd gateway-service && ../gradlew clean bootJar)
-(cd discovery-server && ../gradlew clean bootJar)
-(cd file-storage-service && ../gradlew clean bootJar)
-```
+   ```bash
+   docker compose logs -f --timestamps app file-storage-service
+   ```
 
-Для Docker:
+2. В локальном PostgreSQL создайте тестовый триггер. Он задерживает обновление на пять секунд и отклоняет запись `COMPLETED`.
 
-```bash
-docker compose config --quiet
-docker compose up -d --build --scale app=2 --scale report-service=2
-```
+   ```sql
+   CREATE OR REPLACE FUNCTION demo_reject_export_completed()
+   RETURNS trigger LANGUAGE plpgsql AS $$
+   BEGIN
+       PERFORM pg_sleep(5);
+       RAISE EXCEPTION 'Demo failure while saving COMPLETED';
+   END;
+   $$;
 
-Не используйте `docker compose down -v`, если нужно сохранить данные PostgreSQL и MinIO.
+   CREATE OR REPLACE TRIGGER demo_reject_export_completed
+   BEFORE UPDATE OF status ON report_exports
+   FOR EACH ROW WHEN (NEW.status = 'COMPLETED')
+   EXECUTE FUNCTION demo_reject_export_completed();
+   ```
 
+3. Отправьте `POST /reports/cars/export`. Пока запрос обрабатывается, обновите MinIO. После HTTP `502` сверьте в логах команды `STORE` и `DELETE` по одному имени файла. В MinIO объект должен исчезнуть, а в PostgreSQL должна появиться запись `COMPENSATED`.
+
+   ```sql
+   SELECT id, filename, status, error_message
+   FROM report_exports
+   ORDER BY created_at DESC
+   LIMIT 5;
+   ```
+
+4. Удалите тестовый триггер и повторите экспорт. Ожидается `COMPLETED`.
+
+   ```sql
+   DROP TRIGGER IF EXISTS demo_reject_export_completed ON report_exports;
+   DROP FUNCTION IF EXISTS demo_reject_export_completed();
+   ```
