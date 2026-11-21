@@ -53,7 +53,6 @@ public class ReportStorageQueueClient {
                 .setHeader(ReportStorageQueue.OPERATION, operation)
                 .setHeader(ReportStorageQueue.FILENAME, filename);
         if (ReportStorageQueue.STORE.equals(operation)) {
-            // Expire a waiting upload before the default 30-second RPC timeout.
             command.setExpiration("25000");
         }
 

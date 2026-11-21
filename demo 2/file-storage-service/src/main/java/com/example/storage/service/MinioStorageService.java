@@ -43,7 +43,6 @@ public class MinioStorageService {
         this.bucket = bucket;
     }
 
-    /** Retry bucket creation because Compose starts MinIO and Java services concurrently. */
     public void initializeBucketWithRetry() {
         Exception lastError = null;
         for (int attempt = 1; attempt <= 30; attempt++) {
@@ -138,7 +137,6 @@ public class MinioStorageService {
         }
     }
 
-    /** Идемпотентная компенсирующая операция: удалить объект из Bucket. */
     public void delete(String filename) {
         validateFilename(filename);
         try {

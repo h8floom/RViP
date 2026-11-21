@@ -6,7 +6,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
-/** Converts the list returned by report-service into a UTF-8 CSV document. */
 @Service
 public class CsvReportService {
 
@@ -19,7 +18,6 @@ public class CsvReportService {
 
     public byte[] generate(List<Map<String, Object>> rows) {
         StringBuilder csv = new StringBuilder();
-        // UTF-8 BOM makes Cyrillic/text display more reliably in some spreadsheet programs.
         csv.append('\uFEFF');
         appendRow(csv, HEADERS);
         for (Map<String, Object> row : rows) {
