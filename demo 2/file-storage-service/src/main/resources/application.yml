@@ -25,6 +25,12 @@ eureka:
     enabled: false
 
 management:
+  server:
+    port: 9082
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
   tracing:
     sampling:
       probability: 1.0

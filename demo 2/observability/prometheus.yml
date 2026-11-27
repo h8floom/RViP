@@ -1,0 +1,31 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: gateway
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [gateway]
+        type: A
+        port: 9088
+
+  - job_name: car-center
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [app]
+        type: A
+        port: 9080
+
+  - job_name: report-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [report-service]
+        type: A
+        port: 9081
+
+  - job_name: file-storage-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [file-storage-service]
+        type: A
+        port: 9082

@@ -13,6 +13,10 @@ spring:
             pool:
               type: disabled
           routes:
+            - id: auth-route
+              uri: lb://car-center
+              predicates:
+                - Path=/auth/token
             - id: cars-route
               uri: lb://car-center
               predicates:
@@ -38,6 +42,12 @@ eureka:
     instance-id: "${spring.application.name}:${random.value}"
 
 management:
+  server:
+    port: 9088
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
   tracing:
     sampling:
       probability: 1.0

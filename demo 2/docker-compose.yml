@@ -1,4 +1,22 @@
+x-observability: &observability
+  MANAGEMENT_TRACING_EXPORT_OTLP_ENABLED: "true"
+  MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+
 services:
+  jaeger:
+    image: jaegertracing/jaeger:2.12.0
+    ports:
+      - "127.0.0.1:16686:16686"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    restart: unless-stopped
+
   rabbitmq:
     image: rabbitmq:4.2-management
     hostname: rabbitmq
@@ -25,7 +43,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -98,6 +116,7 @@ services:
     expose:
       - "8081"
     environment:
+      <<: *observability
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-car_center}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
@@ -116,6 +135,7 @@ services:
     expose:
       - "8082"
     environment:
+      <<: *observability
       SPRING_PROFILES_ACTIVE: docker
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-lab5}
@@ -140,6 +160,10 @@ services:
     expose:
       - "8080"
     environment:
+      <<: *observability
+      LAB7_AUTH_USERNAME: ${LAB7_AUTH_USERNAME:-lab7}
+      LAB7_AUTH_PASSWORD: ${LAB7_AUTH_PASSWORD:?Set LAB7_AUTH_PASSWORD in .env}
+      LAB7_JWT_SECRET: ${LAB7_JWT_SECRET:?Set LAB7_JWT_SECRET in .env}
       SPRING_PROFILES_ACTIVE: docker
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-lab5}
@@ -162,8 +186,9 @@ services:
       dockerfile: Dockerfile
     container_name: car-center-gateway
     ports:
-      - "8088:8088"
+      - "127.0.0.1:8088:8088"
     environment:
+      <<: *observability
       SPRING_PROFILES_ACTIVE: docker
       JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0"
     depends_on:

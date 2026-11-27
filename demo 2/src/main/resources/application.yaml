@@ -41,6 +41,12 @@ file:
     service-url: http://localhost:8082
 
 management:
+  server:
+    port: 9080
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
   tracing:
     sampling:
       probability: 1.0
@@ -58,3 +64,9 @@ server:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+
+lab7:
+  auth:
+    username: ${LAB7_AUTH_USERNAME:lab7}
+    password: ${LAB7_AUTH_PASSWORD}
+    jwt-secret: ${LAB7_JWT_SECRET}
