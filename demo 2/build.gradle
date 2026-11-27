@@ -30,6 +30,8 @@ dependencyManagement {
 }
 
 dependencies {
+    implementation project(':parallel-sort')
+
     // REST API, persistence, validation and Liquibase migrations
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'

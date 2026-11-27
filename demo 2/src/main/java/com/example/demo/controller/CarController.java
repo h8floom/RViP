@@ -3,7 +3,9 @@ package com.example.demo.controller;
 import com.example.demo.dto.CarReportResponse;
 import com.example.demo.dto.CarRequest;
 import com.example.demo.dto.CarResponse;
+import com.example.demo.dto.SortedCarsResponse;
 import com.example.demo.service.CarService;
+import com.example.demo.service.CarSortingService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,9 +21,11 @@ public class CarController {
 
     private static final Logger log = LoggerFactory.getLogger(CarController.class);
     private final CarService carService;
+    private final CarSortingService sortingService;
 
-    public CarController(CarService carService) {
+    public CarController(CarService carService, CarSortingService sortingService) {
         this.carService = carService;
+        this.sortingService = sortingService;
     }
 
     @PostMapping
@@ -33,6 +37,11 @@ public class CarController {
     public ResponseEntity<List<CarResponse>> findAll() {
         log.info("HTTP GET /api/cars handled instance={}", instanceId());
         return ResponseEntity.ok(carService.findAll());
+    }
+
+    @GetMapping("/sorted")
+    public SortedCarsResponse findSorted(@RequestParam(name = "threads", defaultValue = "1") int threads) {
+        return sortingService.sortedCars(threads);
     }
 
     @GetMapping("/{id}")

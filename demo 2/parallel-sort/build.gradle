@@ -1,0 +1,20 @@
+plugins {
+    id 'java-library'
+}
+
+group = 'com.example'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(22)
+    }
+}
+
+tasks.register('benchmark', JavaExec) {
+    group = 'verification'
+    description = 'Verify the merge sort and compare execution times for several worker counts.'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.sorting.ParallelMergeSortBenchmark'
+}
