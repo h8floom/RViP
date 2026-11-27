@@ -1,4 +1,7 @@
 spring:
+  mvc:
+    async:
+      request-timeout: 20s
   application:
     name: car-center
   rabbitmq:

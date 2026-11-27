@@ -2,14 +2,12 @@ package com.example.demo;
 
 import com.example.demo.dto.ReportExportResponse;
 import com.example.demo.dto.ReportExportStatusResponse;
+import com.example.demo.service.ReportDownloadService;
 import com.example.demo.service.ReportExportSagaService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,13 +15,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
-
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/reports")
@@ -36,16 +31,19 @@ public class ReportProxyController {
 
     private final RestTemplate restTemplate;
     private final ReportExportSagaService sagaService;
+    private final ReportDownloadService downloadService;
     private final String reportServiceUrl;
     private final String fileStorageServiceUrl;
 
     public ReportProxyController(
             RestTemplate restTemplate,
             ReportExportSagaService sagaService,
+            ReportDownloadService downloadService,
             @Value("${report.service.url:http://localhost:8081}") String reportServiceUrl,
             @Value("${file.storage.service-url:http://localhost:8082}") String fileStorageServiceUrl) {
         this.restTemplate = restTemplate;
         this.sagaService = sagaService;
+        this.downloadService = downloadService;
         this.reportServiceUrl = trimTrailingSlash(reportServiceUrl);
         this.fileStorageServiceUrl = trimTrailingSlash(fileStorageServiceUrl);
     }
@@ -82,21 +80,8 @@ public class ReportProxyController {
     }
 
     @GetMapping("/files/{filename}")
-    public ResponseEntity<byte[]> downloadStoredFile(@PathVariable String filename) {
-        URI uri = UriComponentsBuilder.fromUriString(fileStorageServiceUrl)
-                .pathSegment("api", "files", filename)
-                .build()
-                .encode()
-                .toUri();
-
-        ResponseEntity<byte[]> response = restTemplate.exchange(
-                uri, HttpMethod.GET, HttpEntity.EMPTY, byte[].class);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.parseMediaType("text/csv; charset=UTF-8"));
-        headers.setContentDisposition(ContentDisposition.attachment()
-                .filename(filename, StandardCharsets.UTF_8).build());
-        return new ResponseEntity<>(response.getBody(), headers, response.getStatusCode());
+    public CompletableFuture<ResponseEntity<byte[]>> downloadStoredFile(@PathVariable("filename") String filename) {
+        return downloadService.download(filename);
     }
 
     private List<Map<String, Object>> fetchCarsReport() {
