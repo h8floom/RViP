@@ -34,6 +34,7 @@ public class AuthTokenController {
         Instant now = Instant.now();
         var claims = JwtClaimsSet.builder()
                 .subject(authentication.getName())
+                .claim("department", "reports")
                 .issuer(ApiSecurityConfiguration.ISSUER)
                 .audience(List.of(ApiSecurityConfiguration.AUDIENCE))
                 .issuedAt(now)
